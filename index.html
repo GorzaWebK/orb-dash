@@ -1,0 +1,1805 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+<title>Orb Dash</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@500;700;900&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --pink: #ff2bd6;
+    --cyan: #2ef9ff;
+    --gold: #ffd23f;
+    --violet: #8a2be2;
+    --bg: #05010f;
+    --zone: #ff2bd6;   /* current zone's accent, updated by JS */
+  }
+  html, body {
+    margin: 0; height: 100%; overflow: hidden;
+    background: var(--bg); color: #fff;
+    font-family: 'Orbitron', 'Segoe UI', system-ui, sans-serif;
+    touch-action: none; user-select: none; -webkit-user-select: none;
+    -webkit-tap-highlight-color: transparent;
+  }
+  canvas { display: block; }
+
+  /* ---------- Overlays (start / game over) ---------- */
+  .overlay {
+    position: fixed; inset: 0;
+    display: flex; flex-direction: column; align-items: center; justify-content: center;
+    text-align: center; padding: 16px; box-sizing: border-box;
+    background: radial-gradient(ellipse at center, rgba(25, 3, 50, .35), rgba(5, 1, 15, .78));
+    transition: opacity .35s ease;
+    overflow-y: auto; touch-action: pan-y;
+  }
+  .overlay > * { flex-shrink: 0; }
+  .overlay.hidden { opacity: 0; pointer-events: none; }
+
+  h1 {
+    margin: 0 0 6px; font-weight: 900; letter-spacing: .08em;
+    font-size: clamp(40px, 9vw, 96px); line-height: 1;
+    color: #fff;
+    text-shadow: 0 0 6px #fff, 0 0 18px var(--pink), 0 0 42px var(--pink), 0 0 80px var(--violet);
+  }
+  h2 {
+    margin: 0 0 10px; font-weight: 900; letter-spacing: .1em;
+    font-size: clamp(36px, 9vw, 72px);
+    text-shadow: 0 0 10px var(--pink), 0 0 36px var(--pink);
+  }
+  .tag {
+    margin: 0 0 28px; font-size: clamp(12px, 3vw, 16px); letter-spacing: .4em;
+    color: var(--cyan); text-shadow: 0 0 10px var(--cyan);
+  }
+  .controls {
+    display: grid; gap: 10px; margin-bottom: 30px;
+    font-size: clamp(12px, 3.2vw, 15px); color: #e9dcff;
+  }
+  kbd {
+    display: inline-block; min-width: 1.4em; padding: 3px 7px; margin: 0 2px;
+    border: 1px solid rgba(46, 249, 255, .7); border-radius: 6px;
+    font-family: inherit; font-size: .9em; color: var(--cyan);
+    box-shadow: 0 0 8px rgba(46, 249, 255, .35), inset 0 0 6px rgba(46, 249, 255, .2);
+  }
+  .touch-hint { opacity: .75; }
+  .prompt {
+    font-size: clamp(16px, 4.2vw, 24px); font-weight: 700; letter-spacing: .12em;
+    color: var(--gold); text-shadow: 0 0 12px var(--gold);
+    animation: blink 1.2s ease-in-out infinite;
+  }
+  @keyframes blink { 0%, 100% { opacity: 1; } 50% { opacity: .35; } }
+  .best-line { margin-top: 14px; font-size: 13px; letter-spacing: .25em; opacity: .75; }
+  .prompt.small { font-size: clamp(13px, 3.4vw, 16px); }
+
+  /* ---------- Home page ---------- */
+  .home {
+    display: flex; flex-wrap: wrap; align-items: center; justify-content: center;
+    gap: clamp(24px, 5vw, 64px); width: 100%; max-width: 1080px; margin: auto;
+  }
+  .home-main { display: flex; flex-direction: column; align-items: center; min-width: 0; flex: 1 1 420px; }
+  .name-form { display: flex; flex-direction: column; align-items: center; gap: 8px; margin-bottom: 22px; width: 100%; max-width: 380px; }
+  .name-form label { font-size: 11px; letter-spacing: .35em; color: var(--cyan); }
+  .name-row { display: flex; gap: 8px; width: 100%; }
+  .name-row input {
+    flex: 1; min-width: 0; padding: 12px 14px; border-radius: 10px;
+    background: rgba(8, 2, 24, .8); color: #fff; font: 700 16px 'Orbitron', system-ui, sans-serif; letter-spacing: .06em;
+    border: 1px solid rgba(46, 249, 255, .55); outline: none;
+    box-shadow: 0 0 14px rgba(46, 249, 255, .2), inset 0 0 10px rgba(46, 249, 255, .1);
+  }
+  .name-row input:focus { border-color: var(--cyan); box-shadow: 0 0 20px rgba(46, 249, 255, .45), inset 0 0 10px rgba(46, 249, 255, .15); }
+  .name-row input::placeholder { color: rgba(233, 220, 255, .4); }
+  .name-error { min-height: 1.2em; font-size: 12px; color: #ff8fb1; letter-spacing: .05em; }
+  .btn {
+    padding: 12px 20px; border-radius: 10px; cursor: pointer;
+    font: 900 15px 'Orbitron', system-ui, sans-serif; letter-spacing: .15em;
+    color: #14001f; background: var(--gold); border: none;
+    box-shadow: 0 0 18px rgba(255, 210, 63, .55);
+  }
+  .btn:hover { filter: brightness(1.1); }
+  .btn:focus-visible, .name-row input:focus-visible { outline: 2px solid #fff; outline-offset: 2px; }
+  .btn.ghost { background: transparent; color: #fff; border: 1px solid rgba(255, 255, 255, .5); box-shadow: none; }
+  .btn kbd { color: inherit; border-color: currentColor; box-shadow: none; font-size: .75em; padding: 1px 5px; }
+
+  /* ---------- Leaderboard ---------- */
+  .board {
+    flex: 0 1 340px; min-width: 0; width: 100%; max-width: 380px; text-align: left;
+    background: rgba(10, 2, 28, .72); border: 1px solid var(--zone); border-radius: 14px;
+    padding: 16px 16px 12px; box-sizing: border-box;
+    box-shadow: 0 0 24px -6px var(--zone), inset 0 0 18px rgba(0, 0, 0, .4);
+  }
+  .board-head { font-size: 12px; font-weight: 700; letter-spacing: .3em; margin-bottom: 10px; color: #fff; text-shadow: 0 0 10px var(--zone); }
+  .board-list { list-style: none; margin: 0; padding: 0; display: grid; gap: 4px; }
+  .board-list li {
+    display: grid; grid-template-columns: 2.2em minmax(0, 1fr) auto 5.5em; align-items: baseline; gap: 8px;
+    padding: 6px 8px; border-radius: 7px; font-size: 13px; font-variant-numeric: tabular-nums;
+    background: rgba(255, 255, 255, .03);
+  }
+  .board-list li:nth-child(1) .rk { color: var(--gold); text-shadow: 0 0 8px var(--gold); }
+  .board-list li.me { background: rgba(46, 249, 255, .12); outline: 1px solid rgba(46, 249, 255, .5); }
+  .board-list li.me .nm { color: var(--cyan); }
+  .board-list .rk { opacity: .8; }
+  .board-list .nm { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-family: system-ui, sans-serif; font-weight: 600; }
+  .board-list .zn { font-size: 10px; opacity: .6; letter-spacing: .1em; }
+  .board-list .sc { text-align: right; font-weight: 700; }
+  .board-list.compact li { padding: 4px 8px; font-size: 12px; }
+  .board-note { margin-top: 10px; font-size: 11.5px; line-height: 1.5; color: #cdbfe8; font-family: system-ui, sans-serif; }
+
+  /* ---------- Game over card ---------- */
+  .go-card { display: flex; flex-direction: column; align-items: center; width: 100%; max-width: 380px; margin: auto; }
+  .go-card h2 { white-space: nowrap; font-size: clamp(32px, 9vw, 64px); }
+  .go-meta { margin: 6px 0 4px; letter-spacing: .2em; font-size: 14px; }
+  .go-rank { margin-bottom: 10px; font-size: 13px; letter-spacing: .2em; color: var(--cyan); min-height: 1.2em; }
+  .go-card .board-list { width: 100%; margin-bottom: 18px; text-align: left; }
+  .go-actions { display: flex; gap: 10px; flex-wrap: wrap; justify-content: center; }
+
+  /* ---------- Zone banner ---------- */
+  #zone-banner {
+    position: fixed; left: 0; right: 0; top: 26%; text-align: center; pointer-events: none; opacity: 0;
+  }
+  #zone-banner.show { animation: zoneIn 2.6s ease-out forwards; }
+  .zb-num { font-size: clamp(14px, 3.5vw, 18px); letter-spacing: .5em; color: #fff; text-shadow: 0 0 10px var(--zone); }
+  .zb-name {
+    font-size: clamp(30px, 8vw, 64px); font-weight: 900; letter-spacing: .08em; color: #fff;
+    text-shadow: 0 0 8px #fff, 0 0 24px var(--zone), 0 0 50px var(--zone);
+  }
+  @keyframes zoneIn {
+    0% { opacity: 0; transform: scale(1.4); letter-spacing: .3em; }
+    15% { opacity: 1; transform: scale(1); }
+    75% { opacity: 1; }
+    100% { opacity: 0; transform: translateY(-20px); }
+  }
+  @media (prefers-reduced-motion: reduce) { #zone-banner.show { animation-duration: 2.6s; animation-timing-function: steps(1, end); } }
+
+  .reason { margin-bottom: 22px; color: #e9dcff; letter-spacing: .12em; font-size: clamp(12px, 3.2vw, 15px); }
+  .final-label { font-size: 12px; letter-spacing: .4em; opacity: .7; }
+  .final-score {
+    font-size: clamp(48px, 13vw, 88px); font-weight: 900; line-height: 1.1;
+    color: var(--cyan); text-shadow: 0 0 14px var(--cyan), 0 0 40px rgba(46, 249, 255, .6);
+  }
+  .go-best { margin: 6px 0 4px; letter-spacing: .25em; font-size: 15px; }
+  .newbest {
+    margin: 6px 0 22px; font-weight: 900; letter-spacing: .25em; color: var(--gold);
+    text-shadow: 0 0 12px var(--gold); visibility: hidden;
+  }
+  .newbest.show { visibility: visible; animation: pop .6s ease-out; }
+  @keyframes pop { 0% { transform: scale(.4); } 70% { transform: scale(1.15); } 100% { transform: scale(1); } }
+
+  /* ---------- HUD ---------- */
+  #hud {
+    position: fixed; top: 0; left: 0; right: 0;
+    display: flex; justify-content: space-between; align-items: flex-start; gap: 10px;
+    padding: 14px 16px; pointer-events: none; transition: opacity .3s;
+  }
+  #hud.hidden { opacity: 0; }
+  .hud-group { display: flex; gap: 10px; }
+  .stat {
+    background: rgba(12, 2, 32, .55); backdrop-filter: blur(4px);
+    border: 1px solid var(--zone); border-radius: 10px;
+    padding: 7px 14px; min-width: 64px;
+    box-shadow: 0 0 14px -4px var(--zone), inset 0 0 10px rgba(0, 0, 0, .3);
+    transition: border-color 1s, box-shadow 1s;
+  }
+  .stat .sub { font-size: 9px; letter-spacing: .2em; opacity: .7; margin-top: 2px; }
+  .stat .label { font-size: 9px; letter-spacing: .25em; opacity: .7; }
+  .stat .value { font-size: clamp(16px, 4.5vw, 24px); font-weight: 700; font-variant-numeric: tabular-nums; }
+  #hud-gems { color: var(--gold); text-shadow: 0 0 8px rgba(255, 210, 63, .7); }
+  #hud-score { color: var(--cyan); text-shadow: 0 0 8px rgba(46, 249, 255, .7); }
+
+  /* Active power-up chips with a draining timer bar */
+  #powers {
+    position: fixed; left: max(16px, env(safe-area-inset-left, 0px)); top: calc(88px + env(safe-area-inset-top, 0px));
+    display: flex; flex-direction: column; gap: 8px; pointer-events: none;
+  }
+  .power {
+    width: 128px; padding: 6px 10px; border-radius: 8px; box-sizing: border-box;
+    background: rgba(12, 2, 32, .6); border: 1px solid currentColor;
+    font-size: 10px; font-weight: 700; letter-spacing: .22em;
+    box-shadow: 0 0 12px -3px currentColor;
+  }
+  .power .bar { height: 4px; margin-top: 5px; border-radius: 2px; background: currentColor; transform-origin: left center; }
+  .power.warn { animation: blink .3s steps(2) infinite; }
+  .c-magnet, .power.magnet { color: #ff5a5a; }
+  .c-shield, .power.shield { color: #39ff9c; }
+  .pulse { animation: pulse .25s ease-out; }
+  @keyframes pulse { 0% { transform: scale(1.35); } 100% { transform: scale(1); } }
+  .stat .value { display: inline-block; transform-origin: left center; }
+
+  #mute {
+    position: fixed; right: 14px; bottom: 12px; font-size: 12px; letter-spacing: .15em;
+    opacity: .6; pointer-events: none;
+  }
+  #load-error {
+    position: fixed; inset: 0; display: flex; align-items: center; justify-content: center;
+    padding: 16px; text-align: center; background: var(--bg); color: #ffb3ec; font-size: 16px;
+  }
+  #load-error[hidden] { display: none; }
+</style>
+</head>
+<body>
+
+<!-- HUD -->
+<div id="hud" class="hidden">
+  <div class="stat"><div class="label">SCORE</div><div class="value" id="hud-score">0</div><div class="sub" id="hud-zone">ZONE 1</div></div>
+  <div class="hud-group">
+    <div class="stat"><div class="label">GEMS</div><div class="value" id="hud-gems">0</div></div>
+    <div class="stat"><div class="label">SPEED</div><div class="value" id="hud-speed">0</div></div>
+  </div>
+</div>
+<div id="mute">SOUND ON · M</div>
+<div id="powers">
+  <div class="power magnet" id="pw-magnet" hidden>MAGNET<div class="bar"></div></div>
+  <div class="power shield" id="pw-shield" hidden>SHIELD<div class="bar"></div></div>
+</div>
+
+<!-- Home page: username + leaderboard -->
+<div id="start" class="overlay">
+  <div class="home">
+    <div class="home-main">
+      <h1>ORB DASH</h1>
+      <p class="tag">ROLL · DODGE · COLLECT</p>
+      <form id="name-form" class="name-form" autocomplete="off" novalidate>
+        <label for="name-input">PLAYER NAME</label>
+        <div class="name-row">
+          <input id="name-input" name="username" maxlength="16" placeholder="Enter a username" spellcheck="false" autocapitalize="off" enterkeyhint="go">
+          <button type="submit" class="btn" id="play-btn">PLAY</button>
+        </div>
+        <div class="name-error" id="name-error" role="alert"></div>
+      </form>
+      <div class="controls">
+        <div><kbd>A</kbd><kbd>D</kbd> or <kbd>←</kbd><kbd>→</kbd> move</div>
+        <div><kbd>Space</kbd> jump &nbsp; <kbd>M</kbd> mute</div>
+        <div class="touch-hint">Touch: swipe to move · tap to jump</div>
+        <div><span class="c-magnet">Magnet</span> pulls in gems · <span class="c-shield">Shield</span> absorbs one hit</div>
+        <div class="touch-hint">A new zone every 1,000 m</div>
+      </div>
+      <div class="prompt small" id="start-prompt">Press Enter to play</div>
+      <div class="best-line" id="start-best"></div>
+    </div>
+    <aside class="board" aria-labelledby="board-title">
+      <div class="board-head" id="board-title">GLOBAL LEADERBOARD</div>
+      <ol class="board-list" id="home-board-list"></ol>
+      <div class="board-note" id="home-board-note">Loading leaderboard…</div>
+    </aside>
+  </div>
+</div>
+
+<!-- Game over screen -->
+<div id="gameover" class="overlay hidden">
+  <div class="go-card">
+    <h2>GAME OVER</h2>
+    <div class="reason" id="go-reason"></div>
+    <div class="final-label">FINAL SCORE</div>
+    <div class="final-score" id="go-score">0</div>
+    <div class="go-meta"><span id="go-best">BEST 0</span> · <span id="go-zone">ZONE 1</span></div>
+    <div class="newbest" id="go-new">NEW BEST!</div>
+    <div class="go-rank" id="go-rank"></div>
+    <ol class="board-list compact" id="go-board-list"></ol>
+    <div class="go-actions">
+      <button type="button" class="btn" id="restart-btn">PLAY AGAIN <kbd>R</kbd></button>
+      <button type="button" class="btn ghost" id="home-btn">HOME <kbd>H</kbd></button>
+    </div>
+  </div>
+</div>
+
+<div id="zone-banner" aria-live="polite"><div class="zb-num" id="zb-num"></div><div class="zb-name" id="zb-name"></div></div>
+
+<div id="load-error" hidden>Couldn't load Three.js from the CDN. Check your internet connection and reload.</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script>
+'use strict';
+
+if (typeof THREE === 'undefined') {
+  document.getElementById('load-error').hidden = false;
+  throw new Error('Three.js failed to load');
+}
+
+/* =====================================================================
+   0. CONFIG & HELPERS
+   ===================================================================== */
+const LANE_W        = 2;      // width of one lane (world units)
+const ROW_LEN       = 4;      // length of one track row along Z
+const TILE_H        = 0.4;    // tile thickness (top surface sits at y = 0)
+const BALL_R        = 0.5;
+const GRAVITY       = 28;
+const JUMP_V        = 10;     // peak height ≈ 1.8, airtime ≈ 0.71s
+const START_SPEED   = 12;
+const MAX_SPEED     = 38;
+const ACCEL         = 0.22;   // speed gained per second
+const LANE_EASE     = 14;     // how snappily the ball slides between lanes
+const ROWS_AHEAD    = 32;     // rows kept spawned in front of the ball
+const SAFE_ROWS     = 10;     // obstacle-free rows at the start of a run
+const BLOCK_H       = 0.9;
+const BARRIER_H     = 2.4;    // too tall to jump: must be dodged
+const HIT_R         = 0.42;   // slightly forgiving collision radius
+const MAGNET_TIME   = 8;      // seconds
+const SHIELD_TIME   = 12;     // seconds (or until it absorbs a hit)
+const MAGNET_RANGE  = 7;      // gems closer than this fly to the ball
+
+/* Online leaderboard when hosted outside claude.ai (e.g. GitHub Pages).
+   Paste your Firebase web app config here (Firebase console → Project settings →
+   Your apps → SDK setup → Config). These values identify your project; they are
+   not secrets. Access is enforced by the rules in firestore.rules.
+   Leave apiKey empty and the game keeps scores in each player's browser instead. */
+const FIREBASE_CONFIG = {
+  apiKey: '',
+  authDomain: '',
+  projectId: '',
+  appId: '',
+};
+const FIREBASE_SDK = 'https://www.gstatic.com/firebasejs/10.12.2/';
+
+const isCoarsePointer = window.matchMedia && window.matchMedia('(pointer: coarse)').matches;
+const clamp   = (v, a, b) => Math.max(a, Math.min(b, v));
+const rand    = (a, b) => a + Math.random() * (b - a);
+const randInt = (a, b) => Math.floor(rand(a, b + 1));
+const laneX   = lane => lane * LANE_W;  // lane is -1, 0 or 1
+
+function shuffle(arr) {
+  for (let i = arr.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [arr[i], arr[j]] = [arr[j], arr[i]];
+  }
+  return arr;
+}
+function pickWeighted(list) {
+  let total = 0;
+  for (const [, w] of list) total += w;
+  let r = Math.random() * total;
+  for (const [key, w] of list) { if ((r -= w) <= 0) return key; }
+  return list[list.length - 1][0];
+}
+
+/** Simple object pool so meshes are reused instead of created/destroyed every row. */
+class Pool {
+  constructor(factory) { this.factory = factory; this.free = []; }
+  get() { const o = this.free.pop() || this.factory(); o.visible = true; return o; }
+  release(o) { o.visible = false; this.free.push(o); }
+}
+
+/** Safe localStorage access (private windows / blocked storage can throw). */
+const store = {
+  get(key, fallback) { try { const v = localStorage.getItem(key); return v === null ? fallback : v; } catch (e) { return fallback; } },
+  set(key, value)    { try { localStorage.setItem(key, String(value)); } catch (e) { /* ignore */ } },
+};
+
+/* =====================================================================
+   1. SETUP: renderer, scene, camera, lights, sky
+   ===================================================================== */
+const renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: 'high-performance' });
+renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+renderer.setSize(window.innerWidth, window.innerHeight);
+document.body.prepend(renderer.domElement);
+
+const scene = new THREE.Scene();
+const FOG_COLOR = 0x1c0638;
+scene.fog = new THREE.Fog(FOG_COLOR, 35, 115);
+scene.background = makeSkyTexture();
+
+const camera = new THREE.PerspectiveCamera(62, window.innerWidth / window.innerHeight, 0.1, 500);
+
+scene.add(new THREE.AmbientLight(0x6a4aa8, 0.7));
+const keyLight = new THREE.DirectionalLight(0xff7ad9, 0.6);
+keyLight.position.set(-4, 10, 6);
+scene.add(keyLight);
+
+// --- Procedural canvas textures (no image files) ---
+function makeCanvas(w, h) { const c = document.createElement('canvas'); c.width = w; c.height = h; return c; }
+
+// Sky and sun are canvas textures redrawn when the zone palette changes
+function makeSkyTexture() { return new THREE.CanvasTexture(makeCanvas(4, 512)); }
+function drawSky(c0, c1, c2) {
+  const tex = scene.background, g = tex.image.getContext('2d');
+  const grd = g.createLinearGradient(0, 0, 0, 512);
+  grd.addColorStop(0, c0); grd.addColorStop(0.5, c1); grd.addColorStop(1, c2);
+  g.fillStyle = grd; g.fillRect(0, 0, 4, 512);
+  tex.needsUpdate = true;
+}
+
+function makeGlowTexture() {
+  const c = makeCanvas(64, 64), g = c.getContext('2d');
+  const grd = g.createRadialGradient(32, 32, 0, 32, 32, 32);
+  grd.addColorStop(0, 'rgba(255,255,255,1)');
+  grd.addColorStop(0.2, 'rgba(255,255,255,0.65)');
+  grd.addColorStop(0.5, 'rgba(255,255,255,0.15)');
+  grd.addColorStop(1, 'rgba(255,255,255,0)');
+  g.fillStyle = grd; g.fillRect(0, 0, 64, 64);
+  return new THREE.CanvasTexture(c);
+}
+
+/** Greyscale tile texture: the material's color/emissive tints it to the current zone. */
+function makeTileTexture() {
+  const c = makeCanvas(128, 256), g = c.getContext('2d');
+  g.fillStyle = '#0d0d0f'; g.fillRect(0, 0, 128, 256);
+  // faint inner grid
+  g.strokeStyle = 'rgba(255,255,255,0.28)'; g.lineWidth = 2;
+  for (let y = 64; y < 256; y += 64) { g.beginPath(); g.moveTo(0, y); g.lineTo(128, y); g.stroke(); }
+  g.beginPath(); g.moveTo(64, 0); g.lineTo(64, 256); g.stroke();
+  // bright neon border
+  g.strokeStyle = '#ffffff'; g.lineWidth = 7;
+  g.shadowColor = '#ffffff'; g.shadowBlur = 10;
+  g.strokeRect(4, 4, 120, 248);
+  const t = new THREE.CanvasTexture(c);
+  t.anisotropy = renderer.capabilities.getMaxAnisotropy();
+  return t;
+}
+
+function makeBallTexture() {
+  const c = makeCanvas(256, 128), g = c.getContext('2d');
+  g.fillStyle = '#04324a'; g.fillRect(0, 0, 256, 128);
+  g.fillStyle = '#2ef9ff';
+  g.fillRect(0, 58, 256, 12);                       // equator ring
+  g.fillRect(0, 0, 10, 128); g.fillRect(123, 0, 10, 128); // meridians (show the spin)
+  g.fillStyle = '#ffffff';
+  g.fillRect(0, 62, 256, 4);
+  return new THREE.CanvasTexture(c);
+}
+
+const sunCanvas = makeCanvas(256, 256);
+let sunTex = null;
+function makeSunTexture() { sunTex = new THREE.CanvasTexture(sunCanvas); return sunTex; }
+function drawSun(c0, c1, c2) {
+  const g = sunCanvas.getContext('2d');
+  g.globalCompositeOperation = 'source-over';
+  g.clearRect(0, 0, 256, 256);
+  const grd = g.createLinearGradient(0, 20, 0, 236);
+  grd.addColorStop(0, c0); grd.addColorStop(0.5, c1); grd.addColorStop(1, c2);
+  g.fillStyle = grd;
+  g.beginPath(); g.arc(128, 128, 108, 0, Math.PI * 2); g.fill();
+  // classic synthwave stripe cut-outs on the lower half
+  g.globalCompositeOperation = 'destination-out';
+  for (let i = 0, y = 140; y < 240; i++) { const h = 3 + i * 1.6; g.fillRect(0, y, 256, h); y += h + 9 - i; }
+  if (sunTex) sunTex.needsUpdate = true;
+}
+
+const glowTex = makeGlowTexture();
+
+// --- Starfield (follows the camera so it's always around us) ---
+const stars = (() => {
+  const N = 1500, pos = new Float32Array(N * 3);
+  for (let i = 0; i < N; i++) {
+    const u = Math.random() * 2 - 1, th = Math.random() * Math.PI * 2, r = rand(200, 260);
+    const s = Math.sqrt(1 - u * u);
+    pos[i * 3] = r * s * Math.cos(th); pos[i * 3 + 1] = r * u; pos[i * 3 + 2] = r * s * Math.sin(th);
+  }
+  const geo = new THREE.BufferGeometry();
+  geo.setAttribute('position', new THREE.BufferAttribute(pos, 3));
+  const mat = new THREE.PointsMaterial({ color: 0xffffff, size: 1.6, sizeAttenuation: false, fog: false, transparent: true, opacity: 0.85, depthWrite: false });
+  const pts = new THREE.Points(geo, mat);
+  scene.add(pts);
+  return pts;
+})();
+
+// --- Synthwave sun on the horizon ---
+const sun = new THREE.Mesh(
+  new THREE.PlaneGeometry(70, 70),
+  new THREE.MeshBasicMaterial({ map: makeSunTexture(), transparent: true, fog: false, depthWrite: false })
+);
+scene.add(sun);
+const sunGlow = new THREE.Sprite(new THREE.SpriteMaterial({ map: glowTex, color: 0xff3dbb, transparent: true, opacity: 0.55, blending: THREE.AdditiveBlending, depthWrite: false, fog: false }));
+sunGlow.scale.set(150, 150, 1);
+scene.add(sunGlow);
+
+// --- Neon grid floor far below the track ---
+const gridFloor = new THREE.GridHelper(600, 150, 0xff2bd6, 0x8a2be2);
+gridFloor.material.vertexColors = false;   // single tint we can recolor per zone
+gridFloor.material.transparent = true;
+gridFloor.material.opacity = 0.35;
+gridFloor.position.y = -12;
+scene.add(gridFloor);
+
+/* =====================================================================
+   2. SHARED GEOMETRIES & MATERIALS (reused by every pooled mesh)
+   ===================================================================== */
+const tileTex = makeTileTexture();
+const tileGeo = new THREE.BoxGeometry(LANE_W * 0.97, TILE_H, ROW_LEN * 0.98);
+const tileTopMat  = new THREE.MeshStandardMaterial({ map: tileTex, color: 0xff2bd6, emissive: 0xff2bd6, emissiveMap: tileTex, emissiveIntensity: 0.95, roughness: 0.45, metalness: 0.2 });
+const tileSideMat = new THREE.MeshStandardMaterial({ color: 0x150632, emissive: 0x3a0c6e, emissiveIntensity: 0.6, roughness: 0.6 });
+// Box face order: +x, -x, +y (top), -y, +z, -z
+const tileMats = [tileSideMat, tileSideMat, tileTopMat, tileSideMat, tileSideMat, tileSideMat];
+
+const blockGeo   = new THREE.BoxGeometry(1.5, BLOCK_H, 1.5);
+const blockEdges = new THREE.EdgesGeometry(blockGeo);
+const blockMat   = new THREE.MeshStandardMaterial({ color: 0x2a0030, emissive: 0xff1f8f, emissiveIntensity: 0.45, roughness: 0.4 });
+const blockLineMat = new THREE.LineBasicMaterial({ color: 0xff7ad9 });
+
+const barrierGeo   = new THREE.BoxGeometry(1.8, BARRIER_H, 0.45);
+const barrierEdges = new THREE.EdgesGeometry(barrierGeo);
+const barrierMat   = new THREE.MeshStandardMaterial({ color: 0x301000, emissive: 0xff6a00, emissiveIntensity: 0.55, roughness: 0.4 });
+const barrierLineMat = new THREE.LineBasicMaterial({ color: 0xffd23f });
+
+const gemGeo  = new THREE.OctahedronGeometry(0.36, 0);
+const gemMat  = new THREE.MeshStandardMaterial({ color: 0xffe27a, emissive: 0xffb300, emissiveIntensity: 0.85, flatShading: true, metalness: 0.4, roughness: 0.2 });
+const gemGlowMat = new THREE.SpriteMaterial({ map: glowTex, color: 0xffc23d, transparent: true, opacity: 0.6, blending: THREE.AdditiveBlending, depthWrite: false });
+
+// Power-up pickups: magnet = red horseshoe, shield = green crystal, each inside a glowing halo ring
+const POWER_COLORS = { magnet: 0xff4d4d, shield: 0x39ff9c };
+const magnetGeo    = new THREE.TorusGeometry(0.28, 0.1, 8, 20, Math.PI);
+const magnetTipGeo = new THREE.BoxGeometry(0.2, 0.16, 0.2);
+const shieldGeo    = new THREE.IcosahedronGeometry(0.3, 0);
+const haloGeo      = new THREE.TorusGeometry(0.55, 0.035, 6, 32);
+const tipMat       = new THREE.MeshStandardMaterial({ color: 0xdddddd, emissive: 0xffffff, emissiveIntensity: 0.6 });
+const powerMats = {}, haloMats = {}, powerGlowMats = {};
+for (const [k, c] of Object.entries(POWER_COLORS)) {
+  powerMats[k]     = new THREE.MeshStandardMaterial({ color: c, emissive: c, emissiveIntensity: 0.8, flatShading: true, roughness: 0.3, metalness: 0.3 });
+  haloMats[k]      = new THREE.MeshBasicMaterial({ color: c, transparent: true, opacity: 0.8, blending: THREE.AdditiveBlending, depthWrite: false });
+  powerGlowMats[k] = new THREE.SpriteMaterial({ map: glowTex, color: c, transparent: true, opacity: 0.55, blending: THREE.AdditiveBlending, depthWrite: false });
+}
+
+// --- Pools ---
+function addHidden(obj) { obj.visible = false; scene.add(obj); return obj; }
+const tilePool = new Pool(() => addHidden(new THREE.Mesh(tileGeo, tileMats)));
+const blockPool = new Pool(() => {
+  const m = new THREE.Mesh(blockGeo, blockMat);
+  m.add(new THREE.LineSegments(blockEdges, blockLineMat));
+  return addHidden(m);
+});
+const barrierPool = new Pool(() => {
+  const m = new THREE.Mesh(barrierGeo, barrierMat);
+  m.add(new THREE.LineSegments(barrierEdges, barrierLineMat));
+  return addHidden(m);
+});
+const gemPool = new Pool(() => {
+  const grp = new THREE.Group();
+  const mesh = new THREE.Mesh(gemGeo, gemMat);
+  mesh.scale.y = 1.4;
+  const glow = new THREE.Sprite(gemGlowMat);
+  glow.scale.set(1.7, 1.7, 1);
+  grp.add(mesh, glow);
+  grp.userData.mesh = mesh;
+  return addHidden(grp);
+});
+function makePowerPool(type) {
+  return new Pool(() => {
+    const grp = new THREE.Group();
+    const icon = new THREE.Group();
+    if (type === 'magnet') {
+      icon.add(new THREE.Mesh(magnetGeo, powerMats.magnet));
+      for (const s of [-1, 1]) {
+        const tip = new THREE.Mesh(magnetTipGeo, tipMat);
+        tip.position.set(s * 0.28, -0.08, 0);
+        icon.add(tip);
+      }
+    } else {
+      icon.add(new THREE.Mesh(shieldGeo, powerMats.shield));
+    }
+    const halo = new THREE.Mesh(haloGeo, haloMats[type]);
+    const glow = new THREE.Sprite(powerGlowMats[type]);
+    glow.scale.set(2.2, 2.2, 1);
+    grp.add(icon, halo, glow);
+    grp.scale.setScalar(1.35);   // a bit larger than gems so they read from a distance
+    grp.userData.icon = icon;
+    grp.userData.halo = halo;
+    return addHidden(grp);
+  });
+}
+const powerPools = { magnet: makePowerPool('magnet'), shield: makePowerPool('shield') };
+
+/* =====================================================================
+   3. PARTICLES (one shared Points system for trail, gem bursts, crash)
+   ===================================================================== */
+const particles = (() => {
+  const MAX = 700;
+  const pos = new Float32Array(MAX * 3), col = new Float32Array(MAX * 3);
+  const vel = new Float32Array(MAX * 3), base = new Float32Array(MAX * 3);
+  const life = new Float32Array(MAX), maxLife = new Float32Array(MAX), grav = new Float32Array(MAX);
+  let cursor = 0;
+
+  const geo = new THREE.BufferGeometry();
+  geo.setAttribute('position', new THREE.BufferAttribute(pos, 3));
+  geo.setAttribute('color', new THREE.BufferAttribute(col, 3));
+  const mat = new THREE.PointsMaterial({ size: 0.38, map: glowTex, vertexColors: true, transparent: true, blending: THREE.AdditiveBlending, depthWrite: false });
+  const points = new THREE.Points(geo, mat);
+  points.frustumCulled = false;
+  scene.add(points);
+
+  function emit(x, y, z, vx, vy, vz, l, r, g, b, gravity = 0) {
+    const i = cursor; cursor = (cursor + 1) % MAX;
+    const i3 = i * 3;
+    pos[i3] = x; pos[i3 + 1] = y; pos[i3 + 2] = z;
+    vel[i3] = vx; vel[i3 + 1] = vy; vel[i3 + 2] = vz;
+    base[i3] = r; base[i3 + 1] = g; base[i3 + 2] = b;
+    life[i] = maxLife[i] = l; grav[i] = gravity;
+  }
+
+  function burst(x, y, z, count, colors, speedMin, speedMax, lifeMin, lifeMax, gravity, carryZ = 0) {
+    for (let n = 0; n < count; n++) {
+      const u = Math.random() * 2 - 1, th = Math.random() * Math.PI * 2, s = Math.sqrt(1 - u * u);
+      const sp = rand(speedMin, speedMax);
+      const c = colors[n % colors.length];
+      emit(x, y, z, sp * s * Math.cos(th), sp * u + 1.5, sp * s * Math.sin(th) + carryZ,
+           rand(lifeMin, lifeMax), c[0], c[1], c[2], gravity);
+    }
+  }
+
+  function update(dt) {
+    const drag = Math.exp(-dt * 1.5);
+    for (let i = 0; i < MAX; i++) {
+      const i3 = i * 3;
+      if (life[i] <= 0) { col[i3] = col[i3 + 1] = col[i3 + 2] = 0; continue; }
+      life[i] -= dt;
+      vel[i3 + 1] -= grav[i] * dt;
+      vel[i3] *= drag; vel[i3 + 1] *= drag; vel[i3 + 2] *= drag;
+      pos[i3] += vel[i3] * dt; pos[i3 + 1] += vel[i3 + 1] * dt; pos[i3 + 2] += vel[i3 + 2] * dt;
+      const f = Math.max(0, life[i] / maxLife[i]);   // additive blending: darker = more transparent
+      col[i3] = base[i3] * f; col[i3 + 1] = base[i3 + 1] * f; col[i3 + 2] = base[i3 + 2] * f;
+    }
+    geo.attributes.position.needsUpdate = true;
+    geo.attributes.color.needsUpdate = true;
+  }
+
+  function clear() { life.fill(0); }
+  return { emit, burst, update, clear };
+})();
+
+const COL_CYAN  = [0.18, 0.98, 1.0];
+const COL_PINK  = [1.0, 0.17, 0.84];
+const COL_GOLD  = [1.0, 0.8, 0.25];
+const COL_WHITE = [1.0, 1.0, 1.0];
+const COL_RED   = [1.0, 0.3, 0.3];
+const COL_GREEN = [0.22, 1.0, 0.61];
+
+/* =====================================================================
+   3b. ZONES (a new color palette every ZONE_LEN units, blended smoothly)
+   ===================================================================== */
+const ZONE_LEN = 1000;
+const ZONE_BLEND = 1.6;   // seconds to blend between palettes
+// Ball stays cyan and gems gold, so each palette keeps clear of those.
+const PALETTE_DEFS = [
+  { name: 'NEON DUSK',    edge: '#ff2bd6', side: '#3a0c6e', fog: '#1c0638', sky: ['#020007', '#0e0224', '#2b0a4d'], grid: '#ff2bd6', sun: ['#ffe66d', '#ff6ec7', '#7a2cff'], block: '#ff1f8f', blockLine: '#ff7ad9', barrier: '#ff6a00', barrierLine: '#ffd23f' },
+  { name: 'TOXIC GRID',   edge: '#7dff3a', side: '#12401a', fog: '#04140c', sky: ['#000502', '#03150c', '#0a2e1c'], grid: '#2bff88', sun: ['#f6ff7a', '#7dff3a', '#0d8f6a'], block: '#ff2b6a', blockLine: '#ff8fb1', barrier: '#ff9d00', barrierLine: '#fff07a' },
+  { name: 'SOLAR FLARE',  edge: '#ff8a1f', side: '#5a1a00', fog: '#2a0a00', sky: ['#0a0200', '#2a0800', '#5a1a05'], grid: '#ff5a1f', sun: ['#fff3b0', '#ffb347', '#ff3d3d'], block: '#c42bff', blockLine: '#e3a3ff', barrier: '#2b7dff', barrierLine: '#b5d4ff' },
+  { name: 'DEEP ICE',     edge: '#8f9cff', side: '#1a2a6e', fog: '#050a24', sky: ['#000208', '#060f2e', '#14245a'], grid: '#5a7dff', sun: ['#ffffff', '#9ad0ff', '#5a4dff'], block: '#ff3df2', blockLine: '#ffb3f8', barrier: '#ff6a00', barrierLine: '#ffd23f' },
+  { name: 'CRIMSON VOID', edge: '#ff2b3d', side: '#4a0010', fog: '#1a0006', sky: ['#050001', '#1a0208', '#3a0612'], grid: '#ff2b5a', sun: ['#ffd0a0', '#ff5a5a', '#8a0030'], block: '#b04dff', blockLine: '#dcb0ff', barrier: '#2bffcb', barrierLine: '#b0fff0' },
+];
+const COLOR_KEYS = ['edge', 'side', 'fog', 'grid', 'block', 'blockLine', 'barrier', 'barrierLine', 'sky0', 'sky1', 'sky2', 'sun0', 'sun1', 'sun2'];
+const PALETTES = PALETTE_DEFS.map(d => {
+  const hex = Object.assign({}, d, { sky0: d.sky[0], sky1: d.sky[1], sky2: d.sky[2], sun0: d.sun[0], sun1: d.sun[1], sun2: d.sun[2] });
+  const colors = {};
+  for (const k of COLOR_KEYS) colors[k] = new THREE.Color(hex[k]);
+  return { name: d.name, css: d.edge, colors };
+});
+const zoneName = z => PALETTES[z % PALETTES.length].name;
+
+const zoneCur = {}, zoneFrom = {};
+for (const k of COLOR_KEYS) { zoneCur[k] = new THREE.Color(); zoneFrom[k] = new THREE.Color(); }
+let zoneIndex = 0, zoneT = 1, zoneTo = PALETTES[0];
+
+/** Push the current blended palette into every material, the sky and the sun. */
+function applyZoneColors(p) {
+  tileTopMat.color.copy(p.edge);
+  tileTopMat.emissive.copy(p.edge);
+  tileSideMat.emissive.copy(p.side);
+  tileSideMat.color.copy(p.side).multiplyScalar(0.4);
+  scene.fog.color.copy(p.fog);
+  gridFloor.material.color.copy(p.grid);
+  blockMat.emissive.copy(p.block);
+  blockLineMat.color.copy(p.blockLine);
+  barrierMat.emissive.copy(p.barrier);
+  barrierLineMat.color.copy(p.barrierLine);
+  sunGlow.material.color.copy(p.sun1);
+  drawSky('#' + p.sky0.getHexString(), '#' + p.sky1.getHexString(), '#' + p.sky2.getHexString());
+  drawSun('#' + p.sun0.getHexString(), '#' + p.sun1.getHexString(), '#' + p.sun2.getHexString());
+}
+
+function setZoneInstant(z) {
+  zoneIndex = z; zoneTo = PALETTES[z % PALETTES.length]; zoneT = 1;
+  for (const k of COLOR_KEYS) zoneCur[k].copy(zoneTo.colors[k]);
+  applyZoneColors(zoneCur);
+  document.documentElement.style.setProperty('--zone', zoneTo.css);
+}
+
+function startZoneTransition(z) {
+  zoneIndex = z;
+  for (const k of COLOR_KEYS) zoneFrom[k].copy(zoneCur[k]);
+  zoneTo = PALETTES[z % PALETTES.length];
+  zoneT = 0;
+  document.documentElement.style.setProperty('--zone', zoneTo.css);
+  UI.showZone(z + 1, zoneTo.name);
+  Sound.zone();
+}
+
+function updateZone(dt) {
+  if (state === 'playing') {
+    const z = Math.floor(distance / ZONE_LEN);
+    if (z !== zoneIndex) startZoneTransition(z);
+  }
+  if (zoneT < 1) {
+    zoneT = Math.min(1, zoneT + dt / ZONE_BLEND);
+    const e = zoneT * zoneT * (3 - 2 * zoneT);   // smoothstep
+    for (const k of COLOR_KEYS) zoneCur[k].copy(zoneFrom[k]).lerp(zoneTo.colors[k], e);
+    applyZoneColors(zoneCur);
+  }
+}
+
+/* =====================================================================
+   4. TRACK GENERATION (endless rows of lane tiles + obstacles + gems)
+   ===================================================================== */
+// rows[] is ordered by index; row i sits at z = -i * ROW_LEN (ball runs toward -z)
+const rows = [];
+let lastRowIndex = -1;
+let gen = null; // generator state, reset each run
+
+function resetGenerator() {
+  gen = { cooldown: 0, gapRowsLeft: 0, gapMask: [false, false, false], gemRun: 0, gemLane: 1, powerIn: randInt(18, 28) };
+}
+
+function difficulty(idx) { return clamp((idx - SAFE_ROWS) / 300, 0, 1); }
+
+/** Rows of breathing room between obstacles: grows with speed so reaction time stays fair. */
+function obstacleSpacing(d) {
+  return Math.max(2, Math.ceil(speed / 10)) + randInt(0, d < 0.5 ? 3 : 2);
+}
+
+function rowByIndex(idx) {
+  if (!rows.length) return null;
+  return rows[idx - rows[0].index] || null;
+}
+
+function spawnRow(idx) {
+  const row = { index: idx, z: -idx * ROW_LEN, segs: [null, null, null], blocks: [], barriers: [], gems: [], powers: [] };
+  const present = [true, true, true];   // which lanes have a tile (index 0..2 = lane -1..1)
+  const blocked = [false, false, false];
+  let hasBarrier = false;
+
+  if (idx >= SAFE_ROWS) {
+    const d = difficulty(idx);
+
+    if (gen.gapRowsLeft > 0) {
+      // Continue a multi-row gap
+      for (let l = 0; l < 3; l++) if (gen.gapMask[l]) present[l] = false;
+      gen.gapRowsLeft--;
+      if (gen.gapRowsLeft === 0) gen.cooldown = obstacleSpacing(d);
+    } else if (gen.cooldown > 0) {
+      gen.cooldown--;
+    } else {
+      const type = pickWeighted([
+        ['block',   3],
+        ['laneGap', 2.4],
+        ['fullGap', 1 + 1.2 * d],
+        ['barrier', 0.5 + 2 * d],
+      ]);
+
+      if (type === 'block') {
+        const r = Math.random();
+        const n = r < 0.1 + 0.15 * d ? 3 : (r < 0.4 + 0.3 * d ? 2 : 1);
+        for (const l of shuffle([0, 1, 2]).slice(0, n)) {
+          blocked[l] = true;
+          const m = blockPool.get();
+          m.position.set(laneX(l - 1), BLOCK_H / 2, row.z);
+          row.blocks.push({ mesh: m, x: laneX(l - 1) });
+        }
+        gen.cooldown = obstacleSpacing(d);
+      } else if (type === 'laneGap') {
+        const n = Math.random() < 0.3 + 0.3 * d ? 2 : 1;
+        gen.gapMask = [false, false, false];
+        for (const l of shuffle([0, 1, 2]).slice(0, n)) { gen.gapMask[l] = true; present[l] = false; }
+        gen.gapRowsLeft = randInt(0, 1 + Math.round(2 * d));  // gaps can stretch a few rows: dodge them
+        if (gen.gapRowsLeft === 0) gen.cooldown = obstacleSpacing(d);
+      } else if (type === 'fullGap') {
+        gen.gapMask = [true, true, true];
+        present[0] = present[1] = present[2] = false;
+        // 2-row gaps only when fast enough to clear ~8 units in one jump
+        gen.gapRowsLeft = (speed > 18 && Math.random() < 0.5 * d) ? 1 : 0;
+        if (gen.gapRowsLeft === 0) gen.cooldown = obstacleSpacing(d);
+      } else { // barrier
+        hasBarrier = true;
+        const m = barrierPool.get();
+        const b = { mesh: m, w: rand(1.6, 2.2 + 1.2 * d), phase: rand(0, Math.PI * 2) };
+        m.position.set(0, BARRIER_H / 2, row.z);
+        row.barriers.push(b);
+        gen.cooldown = obstacleSpacing(d);
+      }
+    }
+  }
+
+  // Tiles
+  for (let l = 0; l < 3; l++) {
+    if (!present[l]) continue;
+    const t = tilePool.get();
+    t.position.set(laneX(l - 1), -TILE_H / 2, row.z);
+    row.segs[l] = t;
+  }
+
+  // Power-ups: one every ~35–60 rows, placed only on a full row with no obstacle
+  // (if the countdown ends on a busy row, it waits for the next clean one)
+  let powerLane = -1;
+  if (idx >= SAFE_ROWS && --gen.powerIn <= 0 && !hasBarrier && !row.blocks.length && present.every(Boolean)) {
+    powerLane = randInt(0, 2);
+    const type = Math.random() < 0.5 ? 'magnet' : 'shield';
+    const obj = powerPools[type].get();
+    const px = laneX(powerLane - 1);
+    obj.position.set(px, 1.0, row.z);
+    row.powers.push({ obj, type, x: px, y: 1.0, z: row.z, phase: Math.random() * 6, taken: false });
+    gen.powerIn = randInt(35, 60);
+  }
+
+  // Gems: runs of 4–9 in a lane; float over blocks/gaps so jumping is rewarded
+  if (gen.gemRun <= 0 && idx > 4 && Math.random() < 0.18) {
+    gen.gemRun = randInt(4, 9);
+    gen.gemLane = randInt(0, 2);
+  }
+  if (gen.gemRun > 0 && !hasBarrier) {
+    gen.gemRun--;
+    let l = gen.gemLane;
+    const allMissing = !present[0] && !present[1] && !present[2];
+    if (!present[l] && !allMissing) {
+      // Don't lure the player into a lane gap: shift the run to the nearest solid lane
+      l = present[1] ? 1 : (present[0] ? 0 : 2);
+      gen.gemLane = l;
+    }
+    let y = 0.85;
+    if (allMissing) y = 1.7;
+    else if (blocked[l]) y = 2.0;
+    if (l !== powerLane) {          // the power-up takes this spot instead
+      const g = gemPool.get();
+      g.position.set(laneX(l - 1), y, row.z);
+      row.gems.push({ obj: g, x: laneX(l - 1), y, z: row.z, phase: Math.random() * 6, taken: false, magnet: false });
+    }
+  }
+
+  rows.push(row);
+  lastRowIndex = idx;
+}
+
+function releaseRow(row) {
+  for (const s of row.segs) if (s) tilePool.release(s);
+  for (const b of row.blocks) if (!b.dead) blockPool.release(b.mesh);      // dead = smashed by a shield
+  for (const b of row.barriers) if (!b.dead) barrierPool.release(b.mesh);
+  for (const g of row.gems) if (!g.taken) gemPool.release(g.obj);
+  for (const p of row.powers) if (!p.taken) powerPools[p.type].release(p.obj);
+}
+
+/** Spawn rows ahead of the ball and recycle rows that are behind the camera. */
+function updateTrack() {
+  const ballRow = Math.round(-player.z / ROW_LEN);
+  while (lastRowIndex < ballRow + ROWS_AHEAD) spawnRow(lastRowIndex + 1);
+  while (rows.length && rows[0].z > camera.position.z + ROW_LEN) releaseRow(rows.shift());
+}
+
+/** Is there a tile under world point (x, z)? */
+function segmentAt(x, z) {
+  const row = rowByIndex(Math.round(-z / ROW_LEN));
+  if (!row) return false;
+  const lane = Math.round(x / LANE_W);
+  if (lane < -1 || lane > 1) return false;
+  return !!row.segs[lane + 1];
+}
+
+/* =====================================================================
+   5. PLAYER (the glowing orb)
+   ===================================================================== */
+const ballTex = makeBallTexture();
+const ballGroup = new THREE.Group();          // holds position + squash/stretch
+const ballMesh = new THREE.Mesh(
+  new THREE.SphereGeometry(BALL_R, 32, 24),
+  new THREE.MeshStandardMaterial({ map: ballTex, emissive: 0xffffff, emissiveMap: ballTex, emissiveIntensity: 1, roughness: 0.3, metalness: 0.1 })
+);
+const ballGlow = new THREE.Sprite(new THREE.SpriteMaterial({ map: glowTex, color: 0x2ef9ff, transparent: true, opacity: 0.75, blending: THREE.AdditiveBlending, depthWrite: false }));
+ballGlow.scale.set(3, 3, 1);
+ballGroup.add(ballMesh, ballGlow);
+scene.add(ballGroup);
+
+const ballLight = new THREE.PointLight(0x2ef9ff, 2.2, 9, 2);
+scene.add(ballLight);
+
+// Glowing ring on the track under the ball: helps judge jumps
+const marker = new THREE.Mesh(
+  new THREE.PlaneGeometry(1, 1),
+  new THREE.MeshBasicMaterial({ map: glowTex, color: 0x2ef9ff, transparent: true, opacity: 0.5, blending: THREE.AdditiveBlending, depthWrite: false })
+);
+marker.rotation.x = -Math.PI / 2;
+scene.add(marker);
+
+const player = {
+  x: 0, y: BALL_R, z: 0, vx: 0, vy: 0, lane: 0,
+  grounded: true, falling: false, coyote: 0, jumpBuffer: 0, squash: 0,
+};
+
+const AX_X = new THREE.Vector3(1, 0, 0);
+const AX_Y = new THREE.Vector3(0, 1, 0);
+const AX_Z = new THREE.Vector3(0, 0, 1);
+
+// Active power-up effects around the ball
+const shieldBubble = new THREE.Mesh(
+  new THREE.IcosahedronGeometry(0.9, 1),
+  new THREE.MeshBasicMaterial({ color: POWER_COLORS.shield, wireframe: true, transparent: true, opacity: 0.5, blending: THREE.AdditiveBlending, depthWrite: false })
+);
+const magnetRing = new THREE.Mesh(
+  new THREE.TorusGeometry(0.95, 0.04, 6, 40, Math.PI * 1.5),   // open arc so the spin is visible
+  new THREE.MeshBasicMaterial({ color: POWER_COLORS.magnet, transparent: true, opacity: 0.8, blending: THREE.AdditiveBlending, depthWrite: false })
+);
+magnetRing.rotation.x = Math.PI / 2;
+shieldBubble.visible = magnetRing.visible = false;
+scene.add(shieldBubble, magnetRing);
+
+/** One physics substep while playing. */
+function stepPlayer(h) {
+  // Power-up timers
+  const hadMagnet = magnetT > 0, hadShield = shieldT > 0;
+  magnetT = Math.max(0, magnetT - h);
+  shieldT = Math.max(0, shieldT - h);
+  invulnT = Math.max(0, invulnT - h);
+  if ((hadMagnet && magnetT === 0) || (hadShield && shieldT === 0)) Sound.powerDown();
+
+  speed = Math.min(MAX_SPEED, speed + ACCEL * h);
+  player.z -= speed * h;
+  distance = -player.z;
+
+  // Lateral: ease toward the target lane
+  const prevX = player.x;
+  player.x += (laneX(player.lane) - player.x) * (1 - Math.exp(-h * LANE_EASE));
+  player.vx = (player.x - prevX) / h;
+
+  // Jump (with input buffering + coyote time for a forgiving feel)
+  player.jumpBuffer -= h;
+  player.coyote -= h;
+  if (player.jumpBuffer > 0 && !player.falling && (player.grounded || player.coyote > 0)) {
+    player.vy = JUMP_V; player.grounded = false;
+    player.jumpBuffer = 0; player.coyote = 0;
+    Sound.jump();
+  }
+
+  // Vertical
+  if (!player.grounded) { player.vy -= GRAVITY * h; player.y += player.vy * h; }
+
+  const supported = segmentAt(player.x, player.z);
+  if (player.grounded && !supported) {           // rolled off an edge
+    player.grounded = false; player.vy = 0; player.coyote = 0.08;
+  }
+  if (!player.grounded && !player.falling && player.vy <= 0 && supported &&
+      player.y <= BALL_R && player.y > BALL_R - 0.35) {   // landing
+    if (player.vy < -4) player.squash = clamp(-player.vy / 14, 0.3, 1);
+    player.y = BALL_R; player.vy = 0; player.grounded = true;
+  }
+  if (!player.grounded && !player.falling && player.y < BALL_R - 0.35) {   // past the point of no return
+    player.falling = true;
+    Sound.fall();
+  }
+  if (player.falling && supported && player.y > -BALL_R - TILE_H && player.y < BALL_R - 0.35) {
+    return crash('You clipped the edge of a tile');
+  }
+  if (player.y < -2.5) return fellOff();
+
+  pullGems(h);
+  checkCollisions();
+}
+
+/** Magnet: gems within range fly toward the ball (faster than the ball, so none escape). */
+function pullGems(h) {
+  if (magnetT <= 0) return;
+  const idx = Math.round(-player.z / ROW_LEN);
+  for (let i = idx - 1; i <= idx + 3; i++) {
+    const row = rowByIndex(i);
+    if (!row) continue;
+    for (const g of row.gems) {
+      if (g.taken) continue;
+      const dx = player.x - g.x, dy = player.y - g.y, dz = player.z - g.z;
+      const d = Math.sqrt(dx * dx + dy * dy + dz * dz);
+      if (!g.magnet) {
+        if (d > MAGNET_RANGE) continue;
+        g.magnet = true;
+        g.y = g.obj.position.y;   // start from its current bobbing height
+      }
+      const step = Math.min(d, (speed + 14) * 1.3 * h);
+      if (d > 1e-4) { g.x += dx / d * step; g.y += dy / d * step; g.z += dz / d * step; }
+      g.obj.position.set(g.x, g.y, g.z);
+    }
+  }
+}
+
+/** Ball visuals: position, rolling spin, squash & stretch, glow, trail. */
+function updateBallVisual(dt) {
+  player.squash = Math.max(0, player.squash - dt * 4);
+  const e = player.squash;
+  const stretch = player.grounded ? 0 : clamp(player.vy * 0.012, -0.08, 0.12);
+  const sy = 1 - 0.32 * e + stretch;
+  const sxz = 1 + 0.22 * e - stretch * 0.5;
+  ballGroup.scale.set(sxz, sy, sxz);
+  ballGroup.position.set(player.x, player.y - (1 - sy) * BALL_R, player.z);
+
+  if (state === 'playing') {
+    ballMesh.rotateOnWorldAxis(AX_X, -speed * dt / BALL_R);   // roll forward
+    ballMesh.rotateOnWorldAxis(AX_Z, -player.vx * dt / BALL_R); // roll sideways
+  } else if (state === 'start') {
+    ballMesh.rotateOnWorldAxis(AX_Y, dt * 0.8);
+    ballGroup.position.y += Math.sin(time * 2.4) * 0.05;
+  }
+
+  ballLight.position.set(player.x, player.y + 0.8, player.z);
+  ballLight.intensity = ballGroup.visible ? 2.2 : 0;
+
+  // Power-up effects (flicker during the last 2 seconds)
+  shieldBubble.visible = ballGroup.visible && shieldT > 0;
+  if (shieldBubble.visible) {
+    shieldBubble.position.set(player.x, player.y, player.z);
+    shieldBubble.rotation.y += dt * 1.2;
+    shieldBubble.rotation.x += dt * 0.7;
+    const warn = shieldT < 2 && Math.sin(time * 30) > 0;
+    shieldBubble.material.opacity = warn ? 0.12 : 0.42 + Math.sin(time * 6) * 0.1;
+  }
+  magnetRing.visible = ballGroup.visible && magnetT > 0;
+  if (magnetRing.visible) {
+    magnetRing.position.set(player.x, player.y, player.z);
+    magnetRing.rotation.z += dt * 6;
+    const s = 1 + Math.sin(time * 10) * 0.08;
+    magnetRing.scale.set(s, s, s);
+    magnetRing.material.opacity = (magnetT < 2 && Math.sin(time * 30) > 0) ? 0.15 : 0.8;
+  }
+  // Blink briefly after the shield absorbs a hit
+  ballMesh.visible = !(invulnT > 0 && Math.sin(time * 40) > 0);
+
+  const onTrack = ballGroup.visible && !player.falling && segmentAt(player.x, player.z);
+  marker.visible = onTrack;
+  if (onTrack) {
+    const h = Math.max(0, player.y - BALL_R);
+    const s = Math.max(0.5, 1.4 - h * 0.3);
+    marker.position.set(player.x, 0.02, player.z);
+    marker.scale.set(s, s, 1);
+    marker.material.opacity = Math.max(0.15, 0.55 - h * 0.15);
+  }
+
+  // Short particle trail
+  if (state === 'playing' && ballGroup.visible) {
+    for (let n = 0; n < 2; n++) {
+      const c = Math.random() < 0.7 ? COL_CYAN : COL_PINK;
+      particles.emit(player.x + rand(-0.2, 0.2), player.y + rand(-0.25, 0.15), player.z + rand(0, 0.3),
+                     rand(-0.5, 0.5), rand(0, 0.6), rand(-0.3, 0.3), rand(0.25, 0.45), c[0], c[1], c[2], 0);
+    }
+  }
+}
+
+/* =====================================================================
+   6. OBSTACLES & GEMS (animation)
+   ===================================================================== */
+function barrierX(b) { return Math.sin(time * b.w + b.phase) * LANE_W; }
+
+function updateWorldObjects(dt) {
+  for (const row of rows) {
+    for (const b of row.barriers) b.mesh.position.x = barrierX(b);
+    for (const g of row.gems) {
+      if (g.taken) continue;
+      g.obj.userData.mesh.rotation.y += dt * (g.magnet ? 12 : 3);
+      if (g.magnet) {   // position is driven by pullGems(); leave a gold streak
+        if (Math.random() < 0.6) particles.emit(g.x, g.y, g.z, 0, 0, 0, 0.25, COL_GOLD[0], COL_GOLD[1], COL_GOLD[2], 0);
+      } else {
+        g.obj.position.y = g.y + Math.sin(time * 3 + g.phase) * 0.15;
+      }
+    }
+    for (const p of row.powers) {
+      if (p.taken) continue;
+      p.obj.userData.icon.rotation.y += dt * 2.5;
+      p.obj.userData.halo.rotation.x = Math.sin(time * 1.7 + p.phase) * 0.6;
+      p.obj.userData.halo.rotation.y += dt * 1.5;
+      p.obj.position.y = p.y + Math.sin(time * 2.5 + p.phase) * 0.18;
+    }
+  }
+}
+
+/* =====================================================================
+   7. COLLISIONS (sphere vs box, sphere vs point)
+   ===================================================================== */
+function sphereHitsBox(px, py, pz, r, cx, cy, cz, hx, hy, hz) {
+  const dx = Math.max(Math.abs(px - cx) - hx, 0);
+  const dy = Math.max(Math.abs(py - cy) - hy, 0);
+  const dz = Math.max(Math.abs(pz - cz) - hz, 0);
+  return dx * dx + dy * dy + dz * dz < r * r;
+}
+
+function checkCollisions() {
+  const idx = Math.round(-player.z / ROW_LEN);
+  for (let i = idx - 1; i <= idx + 1; i++) {
+    const row = rowByIndex(i);
+    if (!row) continue;
+    for (const b of row.blocks) {
+      if (b.dead || invulnT > 0) continue;
+      if (sphereHitsBox(player.x, player.y, player.z, HIT_R, b.x, BLOCK_H / 2, row.z, 0.75, BLOCK_H / 2, 0.75)) {
+        if (shieldT > 0) { breakShield(b, blockPool); continue; }
+        return crash('You smashed into a block');
+      }
+    }
+    for (const b of row.barriers) {
+      if (b.dead || invulnT > 0) continue;
+      if (sphereHitsBox(player.x, player.y, player.z, HIT_R, barrierX(b), BARRIER_H / 2, row.z, 0.9, BARRIER_H / 2, 0.225)) {
+        if (shieldT > 0) { breakShield(b, barrierPool); continue; }
+        return crash('A barrier got you');
+      }
+    }
+    for (const g of row.gems) {
+      if (g.taken) continue;
+      const dx = player.x - g.x, dy = player.y - g.obj.position.y, dz = player.z - g.z;
+      if (dx * dx + dy * dy + dz * dz < 1.0) collectGem(g);
+    }
+    for (const p of row.powers) {
+      if (p.taken) continue;
+      const dx = player.x - p.x, dy = player.y - p.obj.position.y, dz = player.z - p.z;
+      if (dx * dx + dy * dy + dz * dz < 1.2) collectPower(p);
+    }
+  }
+}
+
+function collectPower(p) {
+  p.taken = true;
+  powerPools[p.type].release(p.obj);
+  if (p.type === 'magnet') magnetT = MAGNET_TIME; else shieldT = SHIELD_TIME;   // grabbing another refreshes it
+  const c = p.type === 'magnet' ? COL_RED : COL_GREEN;
+  particles.burst(p.x, p.obj.position.y, p.z, 36, [c, c, COL_WHITE], 3, 8, 0.5, 0.9, 5, -speed * 0.6);
+  Sound.power();
+}
+
+/** The shield absorbs the hit: the obstacle shatters and the ball gets a moment of invulnerability. */
+function breakShield(ob, pool) {
+  shieldT = 0;
+  invulnT = 0.6;
+  ob.dead = true;
+  const m = ob.mesh;
+  particles.burst(m.position.x, m.position.y, m.position.z, 60, [COL_GREEN, COL_WHITE, COL_PINK], 4, 11, 0.5, 1.0, 8);
+  pool.release(m);
+  shake = Math.max(shake, 0.45);
+  Sound.shieldBreak();
+}
+
+function collectGem(g) {
+  g.taken = true;
+  gemPool.release(g.obj);
+  gems++;
+  gemCombo = (time - lastGemTime < 0.9) ? Math.min(gemCombo + 1, 8) : 0;
+  lastGemTime = time;
+  particles.burst(g.x, g.obj.position.y, g.z, 26, [COL_GOLD, COL_GOLD, COL_WHITE], 2.5, 6.5, 0.4, 0.75, 6, -speed * 0.6);
+  Sound.gem(gemCombo);
+  UI.pulseGems();
+}
+
+/* =====================================================================
+   8. GAME STATE & FLOW
+   ===================================================================== */
+let state = 'start';            // 'start' | 'playing' | 'dead'
+let speed = START_SPEED;
+let distance = 0, gems = 0, score = 0;
+let best = parseInt(store.get('orbdash_best', '0'), 10) || 0;
+let time = 0, deadTimer = 0, deathType = '', deathReason = '';
+let gemCombo = 0, lastGemTime = -10;
+let shake = 0;
+let magnetT = 0, shieldT = 0, invulnT = 0;   // power-up time remaining (seconds)
+
+function resetWorld() {
+  while (rows.length) releaseRow(rows.shift());
+  lastRowIndex = -4;               // a few rows behind the ball so the camera sees track
+  resetGenerator();
+  particles.clear();
+  Object.assign(player, { x: 0, y: BALL_R, z: 0, vx: 0, vy: 0, lane: 0, grounded: true, falling: false, coyote: 0, jumpBuffer: 0, squash: 0 });
+  speed = START_SPEED; distance = 0; gems = 0; score = 0; gemCombo = 0; shake = 0;
+  magnetT = 0; shieldT = 0; invulnT = 0;
+  setZoneInstant(0);
+  ballGroup.visible = true;
+  ballMesh.rotation.set(0, 0, 0);
+  snapCamera();      // move the camera back first: updateTrack() recycles rows behind it
+  updateTrack();
+}
+
+/** Usernames: printable characters only, single spaces, 2–16 characters. */
+function sanitizeName(s) {
+  return String(s).replace(/[\u0000-\u001f\u007f-\u009f\u200b-\u200f\u2028-\u202e\u2066-\u2069]/g, '')
+    .replace(/\s+/g, ' ').trim().slice(0, 16);
+}
+let playerName = sanitizeName(store.get('orbdash_name', ''));
+
+/** Home page "Play": validate the username, then start. */
+function tryStart() {
+  if (state !== 'start') return;
+  const input = document.getElementById('name-input');
+  const name = sanitizeName(input.value);
+  input.value = name;
+  if (name.length < 2) {
+    UI.nameError('Enter a username of at least 2 characters.');
+    input.focus();
+    return;
+  }
+  UI.nameError('');
+  playerName = name;
+  store.set('orbdash_name', name);
+  LB.rename();
+  if (document.activeElement && document.activeElement.blur) document.activeElement.blur();  // so Space jumps instead of pressing a button
+  startRun();
+}
+
+function startRun() {
+  Sound.unlock();
+  UI.showStart(false);
+  UI.showHUD(true);
+  state = 'playing';
+}
+
+function restartRun() {
+  if (document.activeElement && document.activeElement.blur) document.activeElement.blur();
+  resetWorld();
+  UI.showGameOver(false);
+  UI.showHUD(true);
+  state = 'playing';
+}
+
+function goHome() {
+  resetWorld();
+  UI.showGameOver(false);
+  UI.showHUD(false);
+  UI.showStart(true);
+  UI.refreshBest();
+  state = 'start';
+}
+
+function crash(reason) {
+  if (state !== 'playing') return;
+  deathType = 'crash'; deathReason = reason;
+  particles.burst(player.x, player.y, player.z, 90, [COL_CYAN, COL_PINK, COL_WHITE], 4, 12, 0.7, 1.4, 9);
+  ballGroup.visible = false;
+  shake = 1;
+  Sound.crash();
+  endRun();
+}
+
+function fellOff() {
+  if (state !== 'playing') return;
+  deathType = 'fall'; deathReason = 'You fell into the void';
+  shake = 0.4;
+  endRun();
+}
+
+function endRun() {
+  state = 'dead';
+  deadTimer = 0;
+  magnetT = 0; shieldT = 0; invulnT = 0;
+  score = Math.floor(distance) + gems * 10;
+  const isNewBest = score > best;
+  if (isNewBest) { best = score; store.set('orbdash_best', best); }
+  UI.prepareGameOver(score, best, isNewBest, deathReason, zoneIndex + 1);
+  LB.submit(score, zoneIndex + 1, gems);
+}
+
+function updateDead(dt) {
+  deadTimer += dt;
+  if (deathType === 'fall') {     // keep tumbling down into space
+    player.vy -= GRAVITY * dt;
+    player.y += player.vy * dt;
+    player.z -= speed * 0.5 * dt;
+    ballMesh.rotateOnWorldAxis(AX_X, -speed * 0.5 * dt / BALL_R);
+  }
+  player.vx *= Math.exp(-dt * 6);
+  if (deadTimer > 0.8 && !UI.gameOverVisible) UI.showGameOver(true);
+}
+
+/* =====================================================================
+   9. CAMERA (smooth chase with lag, tilt on turns, shake, speed FOV)
+   ===================================================================== */
+const camBase = new THREE.Vector3();
+const camLook = new THREE.Vector3();
+let camTilt = 0;
+
+/** 0 on landscape screens, up to 0.6 on tall phones: widens the view so all 3 lanes fit. */
+function portraitFactor() { return clamp(1 - camera.aspect, 0, 0.6); }
+
+function cameraTarget(out) {
+  const pf = portraitFactor();
+  let x = player.x * (0.55 - pf * 0.4), y = Math.max(player.y, -0.5) * 0.45 + 3.2 + pf * 1.5;
+  if (state === 'start') { x += Math.sin(time * 0.6) * 1.2 * (1 - pf); y += Math.sin(time * 0.8) * 0.2; }
+  return out.set(x, y, player.z + 7.5 + pf * 4);
+}
+
+function snapCamera() {
+  cameraTarget(camBase);
+  camLook.set(player.x * 0.7, 0.95, player.z - 8);
+  camTilt = 0;
+  camera.position.copy(camBase);
+}
+
+const _camT = new THREE.Vector3();
+function updateCamera(dt) {
+  cameraTarget(_camT);
+  const kxy = 1 - Math.exp(-dt * 5);   // laggy sideways / vertical follow
+  const kz  = 1 - Math.exp(-dt * 14);  // tight forward follow
+  camBase.x += (_camT.x - camBase.x) * kxy;
+  camBase.y += (_camT.y - camBase.y) * kxy;
+  camBase.z += (_camT.z - camBase.z) * kz;
+
+  camLook.x += (player.x * 0.7 - camLook.x) * kxy;
+  camLook.y += (Math.max(player.y, -0.5) * 0.3 + 0.8 - camLook.y) * kxy;
+  camLook.z = player.z - 8;
+
+  const tiltTarget = clamp(-player.vx * 0.02, -0.12, 0.12);
+  camTilt += (tiltTarget - camTilt) * (1 - Math.exp(-dt * 8));
+
+  shake = Math.max(0, shake - dt * 1.6);
+  const s = shake * shake * 0.8;
+  camera.position.set(
+    camBase.x + (Math.random() - 0.5) * s,
+    camBase.y + (Math.random() - 0.5) * s,
+    camBase.z + (Math.random() - 0.5) * s * 0.5
+  );
+  camera.lookAt(camLook);
+  camera.rotateZ(camTilt);
+
+  const fov = 62 + portraitFactor() * 30 + 14 * (speed - START_SPEED) / (MAX_SPEED - START_SPEED);
+  if (Math.abs(camera.fov - fov) > 0.05) { camera.fov = fov; camera.updateProjectionMatrix(); }
+
+  // Backdrop follows the camera
+  stars.position.copy(camera.position);
+  sun.position.set(0, 18, camera.position.z - 200);
+  sunGlow.position.set(0, 18, camera.position.z - 202);
+  gridFloor.position.z = Math.round(camera.position.z / 4) * 4;
+}
+
+/* =====================================================================
+   10. UI (HUD + overlays)
+   ===================================================================== */
+const UI = (() => {
+  const $ = id => document.getElementById(id);
+  const hud = $('hud'), start = $('start'), over = $('gameover');
+  const hScore = $('hud-score'), hGems = $('hud-gems'), hSpeed = $('hud-speed'), hZone = $('hud-zone');
+  const last = { score: -1, gems: -1, speed: -1, zone: -1 };
+  const banner = $('zone-banner');
+  const powerChips = [
+    { el: $('pw-magnet'), get t() { return magnetT; }, total: MAGNET_TIME },
+    { el: $('pw-shield'), get t() { return shieldT; }, total: SHIELD_TIME },
+  ];
+  for (const c of powerChips) c.bar = c.el.querySelector('.bar');
+
+  if (isCoarsePointer) $('start-prompt').hidden = true;   // the Play button is the prompt on touch screens
+  $('name-input').value = playerName;
+
+  return {
+    gameOverVisible: false,
+    showStart(v) { start.classList.toggle('hidden', !v); },
+    showHUD(v)   { hud.classList.toggle('hidden', !v); },
+    showGameOver(v) { over.classList.toggle('hidden', !v); this.gameOverVisible = v; },
+    refreshBest() { $('start-best').textContent = best > 0 ? 'YOUR BEST ' + best : ''; },
+    nameError(msg) { $('name-error').textContent = msg; },
+    showZone(n, name) {
+      $('zb-num').textContent = 'ZONE ' + n;
+      $('zb-name').textContent = name;
+      banner.classList.remove('show'); void banner.offsetWidth; banner.classList.add('show');
+    },
+    prepareGameOver(finalScore, bestScore, isNew, reason, zone) {
+      $('go-score').textContent = finalScore;
+      $('go-best').textContent = 'BEST ' + bestScore;
+      $('go-zone').textContent = 'ZONE ' + zone;
+      $('go-reason').textContent = reason;
+      const nb = $('go-new');
+      nb.classList.remove('show');
+      if (isNew) { void nb.offsetWidth; nb.classList.add('show'); }
+    },
+    update() {
+      const sc = state === 'playing' ? Math.floor(distance) + gems * 10 : score;
+      const sp = Math.round(speed * 3.6);
+      if (sc !== last.score) { hScore.textContent = sc; last.score = sc; }
+      if (gems !== last.gems) { hGems.textContent = gems; last.gems = gems; }
+      if (sp !== last.speed) { hSpeed.textContent = sp + ' km/h'; last.speed = sp; }
+      if (zoneIndex !== last.zone) { hZone.textContent = 'ZONE ' + (zoneIndex + 1); last.zone = zoneIndex; }
+      for (const c of powerChips) {
+        const t = c.t, on = state === 'playing' && t > 0;
+        if (c.el.hidden === on) c.el.hidden = !on;
+        if (on) {
+          c.bar.style.transform = 'scaleX(' + (t / c.total).toFixed(3) + ')';
+          c.el.classList.toggle('warn', t < 2);
+        }
+      }
+    },
+    pulseGems() { hGems.classList.remove('pulse'); void hGems.offsetWidth; hGems.classList.add('pulse'); },
+    setMuted(m) { $('mute').textContent = (m ? 'MUTED' : 'SOUND ON') + ' · M'; },
+  };
+})();
+
+/* =====================================================================
+   11. AUDIO (Web Audio API synth, no files)
+   ===================================================================== */
+const Sound = (() => {
+  let ctx = null, master = null, noiseBuf = null;
+  let muted = store.get('orbdash_muted', '0') === '1';
+  const PENTA = [0, 2, 4, 7, 9, 12, 14, 16, 19];   // rising pitch for gem combos
+
+  function ensure() {
+    if (!ctx) {
+      const AC = window.AudioContext || window.webkitAudioContext;
+      if (!AC) return null;
+      ctx = new AC();
+      master = ctx.createGain();
+      master.gain.value = muted ? 0 : 0.5;
+      master.connect(ctx.destination);
+      noiseBuf = ctx.createBuffer(1, ctx.sampleRate, ctx.sampleRate);
+      const d = noiseBuf.getChannelData(0);
+      for (let i = 0; i < d.length; i++) d[i] = Math.random() * 2 - 1;
+    }
+    if (ctx.state === 'suspended') ctx.resume();
+    return ctx;
+  }
+
+  function tone(f0, f1, dur, type, vol, delay = 0) {
+    const c = ensure(); if (!c) return;
+    const t = c.currentTime + delay;
+    const o = c.createOscillator(), g = c.createGain();
+    o.type = type;
+    o.frequency.setValueAtTime(f0, t);
+    o.frequency.exponentialRampToValueAtTime(f1, t + dur);
+    g.gain.setValueAtTime(0.0001, t);
+    g.gain.exponentialRampToValueAtTime(vol, t + 0.01);
+    g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+    o.connect(g); g.connect(master);
+    o.start(t); o.stop(t + dur + 0.05);
+  }
+
+  function noise(dur, vol, fFrom, fTo) {
+    const c = ensure(); if (!c) return;
+    const t = c.currentTime;
+    const src = c.createBufferSource(); src.buffer = noiseBuf;
+    const filt = c.createBiquadFilter(); filt.type = 'lowpass';
+    filt.frequency.setValueAtTime(fFrom, t);
+    filt.frequency.exponentialRampToValueAtTime(fTo, t + dur);
+    const g = c.createGain();
+    g.gain.setValueAtTime(vol, t);
+    g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+    src.connect(filt); filt.connect(g); g.connect(master);
+    src.start(t); src.stop(t + dur + 0.05);
+  }
+
+  UI.setMuted(muted);
+
+  return {
+    unlock: ensure,
+    jump()  { tone(260, 640, 0.16, 'square', 0.1); },
+    gem(step = 0) {
+      const f = 880 * Math.pow(2, PENTA[step] / 12);
+      tone(f, f, 0.09, 'sine', 0.22);
+      tone(f * 1.5, f * 1.5, 0.14, 'triangle', 0.12, 0.05);
+    },
+    crash() { noise(0.55, 0.7, 4000, 120); tone(190, 38, 0.5, 'sawtooth', 0.22); },
+    fall()  { tone(520, 55, 0.9, 'triangle', 0.2); },
+    power() {   // bright rising arpeggio
+      [0, 4, 7, 12].forEach((s, i) => { const f = 523 * Math.pow(2, s / 12); tone(f, f, 0.12, 'square', 0.07, i * 0.05); });
+    },
+    shieldBreak() { noise(0.35, 0.5, 9000, 1500); tone(1400, 300, 0.3, 'triangle', 0.18); },
+    powerDown()   { tone(700, 250, 0.25, 'sine', 0.12); },
+    zone() {      // shimmering major chord for a new zone
+      [392, 494, 587, 784].forEach((f, i) => tone(f, f * 1.01, 0.7, 'triangle', 0.07, i * 0.06));
+    },
+    toggleMute() {
+      muted = !muted;
+      store.set('orbdash_muted', muted ? '1' : '0');
+      if (master) master.gain.setTargetAtTime(muted ? 0 : 0.5, ctx.currentTime, 0.02);
+      UI.setMuted(muted);
+    },
+  };
+})();
+
+/* =====================================================================
+   11b. LEADERBOARD
+   One record per player at scores/<their id>, which only that player
+   can write. The backend depends on where the game runs:
+   - published on claude.ai: the Artifact's shared database
+   - elsewhere with FIREBASE_CONFIG filled in: Cloud Firestore
+     (anonymous sign-in, rules in firestore.rules)
+   - otherwise: scores kept in this browser only
+   ===================================================================== */
+const LB = (() => {
+  const $ = id => document.getElementById(id);
+  const lb = { mode: 'loading', status: 'loading', entries: [], myId: null, mine: null, canWrite: false, localNote: '', error: '' };
+  let backend = null, writing = Promise.resolve(), loadTimer = 0;
+
+  function readLocal() {
+    try { const a = JSON.parse(store.get('orbdash_local_board', '[]')); return Array.isArray(a) ? a : []; } catch (e) { return []; }
+  }
+  /** Shared rows are untrusted: keep only well-formed fields. */
+  function clean(id, d) {
+    if (!d || typeof d !== 'object') return null;
+    const name = typeof d.name === 'string' ? sanitizeName(d.name) : '';
+    const bestScore = Math.floor(Number(d.best));
+    if (!name || !Number.isFinite(bestScore) || bestScore < 0) return null;
+    const zone = Math.floor(Number(d.bestZone));
+    return { id, name, best: bestScore, zone: Number.isFinite(zone) && zone > 0 ? zone : 1 };
+  }
+  function loadLocalEntries() {
+    lb.entries = readLocal().map((e, i) => clean('local-' + i, { name: e.name, best: e.score, bestZone: e.zone })).filter(Boolean);
+  }
+  function useLocal(note) {
+    lb.mode = 'local'; lb.status = 'ok'; lb.localNote = note;
+    loadLocalEntries();
+    render();
+  }
+  const isMe = e => lb.mode === 'global' ? (lb.myId !== null && e.id === lb.myId) : e.name === playerName;
+
+  function renderList(el, max) {
+    el.textContent = '';
+    lb.entries.slice(0, max).forEach((e, i) => {
+      const li = document.createElement('li');
+      if (isMe(e)) li.className = 'me';
+      const cells = [['rk', String(i + 1)], ['nm', e.name], ['zn', 'Z' + e.zone], ['sc', e.best.toLocaleString()]];
+      for (const [cls, text] of cells) {
+        const s = document.createElement('span');
+        s.className = cls; s.textContent = text;   // textContent: usernames are never parsed as HTML
+        li.appendChild(s);
+      }
+      el.appendChild(li);
+    });
+  }
+
+  function render() {
+    $('board-title').textContent = lb.mode === 'local' ? 'LOCAL SCORES' : 'GLOBAL LEADERBOARD';
+    renderList($('home-board-list'), 10);
+    renderList($('go-board-list'), 5);
+    const notes = [];
+    if (lb.status === 'loading') notes.push('Loading leaderboard…');
+    else if (lb.status === 'timeout') notes.push("Can't reach the leaderboard yet. It will fill in when it connects.");
+    else if (lb.status === 'error') notes.push('The leaderboard is unavailable right now. Your best score is still saved on this device.');
+    else if (!lb.entries.length) notes.push('No scores yet. Set the first one!');
+    if (lb.mode === 'local') notes.push(lb.localNote);
+    if (lb.mode === 'global' && lb.status !== 'loading' && !lb.canWrite) notes.push("You can see the leaderboard, but your scores can't be posted to it.");
+    if (lb.error) notes.push(lb.error);
+    const note = $('home-board-note');
+    note.textContent = notes.join(' ');
+    note.hidden = !notes.length;
+    const idx = lb.entries.findIndex(isMe);
+    $('go-rank').textContent = idx >= 0 ? (lb.mode === 'local' ? 'LOCAL' : 'GLOBAL') + ' RANK #' + (idx + 1) : '';
+  }
+
+  /** Your stored best counts as your best on any device. */
+  function syncBest() {
+    const b = Math.floor(Number(lb.mine && lb.mine.best)) || 0;
+    if (b > best) { best = b; store.set('orbdash_best', best); }
+    if (state === 'start') UI.refreshBest();
+  }
+
+  function queueWrite(rec) {
+    lb.mine = rec;
+    writing = writing.then(() => backend.save(rec)).catch(e => {
+      const code = e && e.code;
+      // claude.ai db: invalid_argument / not_granted; Firestore: permission-denied
+      if (code === 'invalid_argument' || code === 'not_granted' || code === 'permission-denied') lb.canWrite = false;
+      else if (code === 'quota_exceeded' || code === 'resource-exhausted') lb.error = 'The leaderboard is full or busy, so this score could not be saved.';
+      else lb.error = "Your last score couldn't be saved. It will be sent with your next run.";
+      render();
+    });
+  }
+
+  /* ---- Backends. Each provides: myId, canWrite, watchTop(next, fail), watchMine(next), save(rec) ---- */
+
+  /** claude.ai published Artifact: the platform's shared database, rules declared at publish. */
+  async function connectClaude(c) {
+    let db = null, user = null;
+    try { [db, user] = await Promise.all([c.use('db'), c.use('user')]); } catch (e) { /* treated as unavailable */ }
+    if (!db) return null;
+    let myId = null, can = null, ref = null;
+    try { myId = user ? await user.id() : null; } catch (e) { myId = null; }
+    try { can = user ? await user.can('data.write') : null; } catch (e) { can = null; }
+    if (myId) { try { ref = db.doc('scores/' + myId); } catch (e) { ref = null; } }
+    return {
+      myId,
+      canWrite: !!ref && can !== false,
+      watchTop(next, fail) {
+        db.collection('scores').orderBy('best', 'desc').limit(50).onSnapshot(
+          snap => next(snap.docs.map(d => ({ id: d.id, data: d.data() })), snap.metadata.fromCache), fail);
+      },
+      watchMine(next) { if (ref) ref.onSnapshot(s => next(s.exists ? s.data() : null), () => {}); },
+      save: rec => ref.set(rec),
+    };
+  }
+
+  function loadScript(src) {
+    return new Promise((resolve, reject) => {
+      const s = document.createElement('script');
+      s.src = src; s.async = true;
+      s.onload = resolve;
+      s.onerror = () => reject(new Error('Could not load ' + src));
+      document.head.appendChild(s);
+    });
+  }
+
+  /** Anywhere else (e.g. GitHub Pages): Firestore, with an anonymous sign-in per browser.
+   *  Each player writes only scores/<their uid>, enforced by firestore.rules. */
+  async function connectFirebase() {
+    if (!window.firebase) {
+      await loadScript(FIREBASE_SDK + 'firebase-app-compat.js');
+      await Promise.all([loadScript(FIREBASE_SDK + 'firebase-auth-compat.js'), loadScript(FIREBASE_SDK + 'firebase-firestore-compat.js')]);
+    }
+    const fb = window.firebase;
+    const app = fb.apps.length ? fb.app() : fb.initializeApp(FIREBASE_CONFIG);
+    const fs = app.firestore();
+    const scores = fs.collection('scores');
+    let myId = null, ref = null;
+    try {
+      const auth = app.auth();
+      const cred = auth.currentUser ? { user: auth.currentUser } : await auth.signInAnonymously();
+      myId = cred.user.uid;
+      ref = scores.doc(myId);
+    } catch (e) {
+      // Anonymous sign-in disabled or blocked: show the board read-only
+      console.info('Orb Dash: Firebase sign-in unavailable, leaderboard is read-only.', e && e.code);
+    }
+    return {
+      myId,
+      canWrite: !!ref,
+      watchTop(next, fail) {
+        scores.orderBy('best', 'desc').limit(50).onSnapshot(
+          snap => next(snap.docs.map(d => ({ id: d.id, data: d.data() })), snap.metadata.fromCache), fail);
+      },
+      watchMine(next) { if (ref) ref.onSnapshot(s => next(s.exists ? s.data() : null), () => {}); },
+      save: rec => ref.set(rec),
+    };
+  }
+
+  async function init() {
+    render();
+    const c = window.claude;
+    if (c && typeof c.use === 'function') {
+      backend = await connectClaude(c);
+      if (!backend) return useLocal('Sign in to claude.ai to see the global leaderboard. These scores are kept in this browser.');
+    } else if (FIREBASE_CONFIG.apiKey && FIREBASE_CONFIG.projectId) {
+      try { backend = await connectFirebase(); }
+      catch (e) {
+        console.warn('Orb Dash: online leaderboard unavailable, using local scores.', e);
+        return useLocal("The online leaderboard couldn't connect. These scores are kept in this browser.");
+      }
+    } else {
+      return useLocal('Scores are kept in this browser. No online leaderboard is set up for this copy of the game.');
+    }
+
+    lb.mode = 'global';
+    lb.myId = backend.myId;
+    lb.canWrite = backend.canWrite;
+    render();
+
+    loadTimer = setTimeout(() => { if (lb.status === 'loading') { lb.status = 'timeout'; render(); } }, 10000);
+    backend.watchTop((rows, fromCache) => {
+      lb.entries = rows.map(r => clean(r.id, r.data)).filter(Boolean);
+      if (!fromCache) { lb.status = 'ok'; clearTimeout(loadTimer); }
+      render();
+    }, () => { clearTimeout(loadTimer); lb.status = 'error'; render(); });
+
+    backend.watchMine(data => {
+      if (data) lb.mine = Object.assign({}, lb.mine, data);
+      syncBest();
+    });
+  }
+
+  return {
+    init,
+    render,
+    /** Record a finished run: keeps the player's best, latest score and run count. */
+    submit(finalScore, zone, gemsN) {
+      if (lb.mode === 'local') {
+        const list = readLocal();
+        list.push({ name: playerName, score: finalScore, zone });
+        list.sort((a, b) => (Number(b.score) || 0) - (Number(a.score) || 0));
+        store.set('orbdash_local_board', JSON.stringify(list.slice(0, 20)));
+        loadLocalEntries();
+        render();
+        return;
+      }
+      if (lb.mode !== 'global' || !lb.canWrite || !backend) return;
+      lb.error = '';
+      const prev = lb.mine || {};
+      const prevBest = Math.floor(Number(prev.best)) || 0;
+      const improved = finalScore > prevBest;
+      queueWrite({
+        name: playerName,
+        best: improved ? finalScore : prevBest,
+        bestZone: improved ? zone : (Math.floor(Number(prev.bestZone)) || 1),
+        bestGems: improved ? gemsN : (Math.floor(Number(prev.bestGems)) || 0),
+        lastScore: finalScore,
+        runs: (Math.floor(Number(prev.runs)) || 0) + 1,
+        updatedAt: Date.now(),
+      });
+    },
+    /** A changed username shows on the board right away (only once the player has a record). */
+    rename() {
+      if (lb.mode !== 'global' || !lb.canWrite || !backend || !lb.mine) return;
+      if (lb.mine.name === playerName) return;
+      queueWrite(Object.assign({}, lb.mine, { name: playerName, updatedAt: Date.now() }));
+    },
+  };
+})();
+
+/* =====================================================================
+   12. INPUT (keyboard + touch)
+   ===================================================================== */
+function moveLane(dir) {
+  if (state !== 'playing') return;
+  player.lane = clamp(player.lane + dir, -1, 1);
+}
+function requestJump() {
+  if (state === 'playing') player.jumpBuffer = 0.12;
+}
+
+window.addEventListener('keydown', e => {
+  // While typing a username, keys belong to the text box (Enter submits the form)
+  if (e.target && e.target.tagName === 'INPUT') return;
+  const k = e.code;
+  if (['Space', 'ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown'].includes(k)) e.preventDefault();
+  if (k === 'KeyM' && !e.repeat) { Sound.toggleMute(); return; }
+  if (e.repeat) return;
+
+  if (state === 'start') {
+    if (k === 'Space' || k === 'Enter') tryStart();
+  } else if (state === 'playing') {
+    if (k === 'ArrowLeft' || k === 'KeyA') moveLane(-1);
+    else if (k === 'ArrowRight' || k === 'KeyD') moveLane(1);
+    else if (k === 'Space' || k === 'ArrowUp' || k === 'KeyW') requestJump();
+  } else if (state === 'dead' && deadTimer > 0.4) {
+    if (k === 'KeyR') restartRun();
+    else if (k === 'KeyH' || k === 'Escape') goHome();
+  }
+});
+
+// Home page form and game-over buttons
+document.getElementById('name-form').addEventListener('submit', e => { e.preventDefault(); Sound.unlock(); tryStart(); });
+document.getElementById('restart-btn').addEventListener('click', () => { if (state === 'dead') restartRun(); });
+document.getElementById('home-btn').addEventListener('click', () => { if (state === 'dead') goHome(); });
+
+// Touch (during a run only, so menus, buttons and the name box work normally):
+// swipe left/right to change lane, tap to jump
+let touch = null;
+window.addEventListener('touchstart', e => {
+  if (state !== 'playing') { touch = null; return; }
+  e.preventDefault();
+  const t = e.changedTouches[0];
+  touch = { x: t.clientX, y: t.clientY, t: performance.now(), swiped: false };
+}, { passive: false });
+window.addEventListener('touchmove', e => {
+  if (!touch) return;
+  e.preventDefault();
+  if (touch.swiped) return;
+  const dx = e.changedTouches[0].clientX - touch.x;
+  if (Math.abs(dx) > 35) { moveLane(dx > 0 ? 1 : -1); touch.swiped = true; }   // react mid-swipe
+}, { passive: false });
+window.addEventListener('touchend', e => {
+  if (!touch) return;
+  e.preventDefault();
+  const t = e.changedTouches[0];
+  const dx = t.clientX - touch.x, dy = t.clientY - touch.y;
+  if (!touch.swiped && Math.abs(dx) > 30 && Math.abs(dx) > Math.abs(dy)) moveLane(dx > 0 ? 1 : -1);
+  else if (!touch.swiped && Math.hypot(dx, dy) < 20 && performance.now() - touch.t < 350) requestJump();
+  touch = null;
+}, { passive: false });
+
+/* =====================================================================
+   13. RESIZE & MAIN LOOP
+   ===================================================================== */
+window.addEventListener('resize', () => {
+  camera.aspect = window.innerWidth / window.innerHeight;
+  camera.updateProjectionMatrix();
+  renderer.setSize(window.innerWidth, window.innerHeight);
+});
+
+const clock = new THREE.Clock();
+
+function frame() {
+  requestAnimationFrame(frame);
+  const dt = Math.min(clock.getDelta(), 0.05);   // clamp so tab switches don't teleport the ball
+  time += dt;
+
+  if (state === 'playing') {
+    // Substeps keep collisions solid at high speed / low frame rates
+    const n = Math.ceil(dt / (1 / 120));
+    for (let i = 0; i < n && state === 'playing'; i++) stepPlayer(dt / n);
+  } else if (state === 'dead') {
+    updateDead(dt);
+  }
+
+  updateTrack();
+  updateZone(dt);
+  updateWorldObjects(dt);
+  updateBallVisual(dt);
+  particles.update(dt);
+  updateCamera(dt);
+  UI.update();
+
+  renderer.render(scene, camera);
+}
+
+resetWorld();
+UI.refreshBest();
+LB.init();
+if (!isCoarsePointer && !playerName) document.getElementById('name-input').focus();
+frame();
+
+// Small hook for automated testing / debugging from the console
+window.__orbDash = { get state() { return state; }, get score() { return Math.floor(distance) + gems * 10; }, get gems() { return gems; }, get speed() { return speed; }, player };
+</script>
+</body>
+</html>

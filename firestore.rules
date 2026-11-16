@@ -1,0 +1,37 @@
+rules_version = '2';
+
+// Security rules for the Orb Dash leaderboard.
+// Paste into Firebase console → Firestore Database → Rules, then Publish.
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // One record per player, keyed by their anonymous sign-in uid.
+    match /scores/{uid} {
+      allow read: if true;                                   // the leaderboard is public
+      allow create: if isPlayer(uid) && validScore();
+      allow update: if isPlayer(uid) && validScore()
+                    && request.resource.data.best >= resource.data.best   // a best score never goes down
+                    && request.resource.data.runs >= resource.data.runs;
+      allow delete: if false;                                // remove entries from the Firebase console
+    }
+
+    // Everything else is closed by default.
+
+    function isPlayer(uid) {
+      return request.auth != null && request.auth.uid == uid;
+    }
+
+    function validScore() {
+      let d = request.resource.data;
+      return d.keys().hasOnly(['name', 'best', 'bestZone', 'bestGems', 'lastScore', 'runs', 'updatedAt'])
+        && d.keys().hasAll(['name', 'best', 'runs'])
+        && d.name is string && d.name.size() >= 2 && d.name.size() <= 16
+        && d.best is int && d.best >= 0 && d.best <= 1000000
+        && d.runs is int && d.runs >= 1 && d.runs <= 1000000
+        && (!('bestZone' in d) || (d.bestZone is int && d.bestZone >= 1 && d.bestZone <= 10000))
+        && (!('bestGems' in d) || (d.bestGems is int && d.bestGems >= 0 && d.bestGems <= 1000000))
+        && (!('lastScore' in d) || (d.lastScore is int && d.lastScore >= 0 && d.lastScore <= 1000000))
+        && (!('updatedAt' in d) || d.updatedAt is int);
+    }
+  }
+}
