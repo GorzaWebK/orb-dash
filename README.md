@@ -1,5 +1,7 @@
 # Orb Dash
 
+### ▶ [Play Orb Dash](https://gorzawebk.github.io/orb-dash/)
+
 A neon 3D endless runner for the browser. Roll a glowing orb along a floating track in space, collect gems, grab power-ups and dodge blocks, gaps and sliding barriers while the speed keeps climbing.
 
 Everything is in one `index.html`: [Three.js](https://threejs.org/) r128 loads from a CDN, and all graphics and sound effects are generated in code. No build step, no npm.
@@ -27,7 +29,7 @@ Open `index.html` in a browser (you need an internet connection for the Three.js
 1. Push this repository to GitHub.
 2. In the repository, open **Settings → Pages**.
 3. Under **Build and deployment**, choose **Deploy from a branch**, pick `main` and `/ (root)`, and save.
-4. After a minute the game is live at `https://<your-username>.github.io/<repository-name>/`.
+4. After a minute the game is live at [gorzawebk.github.io/orb-dash](https://gorzawebk.github.io/orb-dash/). (For a fork, it's `https://<your-username>.github.io/<repository-name>/`.)
 
 ## Set up the global leaderboard (Firebase)
 
