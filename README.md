@@ -11,7 +11,7 @@
 <img src="https://img.shields.io/badge/Controls-keys%20·%20swipe-00C8FF?style=for-the-badge" alt="Controls: keys · swipe">
 <img src="https://img.shields.io/badge/Built%20with-Three.js%20r128-000000?style=for-the-badge&logo=threedotjs&logoColor=white" alt="Built with: Three.js r128">
 
-<sub>▲ A real run, recorded in the browser: gems, a magnet, a sliding barrier, and finally a missed tile.</sub>
+<sub>▲ A real run, recorded in the browser and steered by a small autopilot script: gems, a magnet, a sliding barrier, and finally a missed tile.</sub>
 
 <sub>✦ · · · ✦ · · · ✦ · · · ✦ · · · ✦ · · · ✦ · · · ✦</sub>
 
